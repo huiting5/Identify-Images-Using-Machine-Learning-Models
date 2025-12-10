@@ -1,0 +1,259 @@
+---
+title: "Identify Images Using Machine Learning Models"
+author: "Huiting Wu"
+format: 
+  html:
+    self-contained: true
+---
+
+```{r, message = FALSE, warning = FALSE}
+# load packages
+library(tidyverse)
+library(rpart) 
+library(ranger) # fast implementation of random forests
+```
+
+The Fashion MNIST data set, which consists of a training set of 60,000 images and a test set of 10,000 images. As the name suggests, this data set is similar in structure to the original MNIST data set (lecture 19), except the images are of different articles of clothing, rather than handwritten digits. The response variable consists of the following 10 categories:
+
+-   0 T-shirt/top
+-   1 Trouser
+-   2 Pullover
+-   3 Dress
+-   4 Coat
+-   5 Sandal
+-   6 Shirt
+-   7 Sneaker
+-   8 Bag
+-   9 Ankle boot
+
+Additional information about the data set is provided on Kaggle:
+
+<https://www.kaggle.com/datasets/zalando-research/fashionmnist>
+
+# Import Data Set
+
+```{r, message = FALSE}
+fmnist_train <- read_csv("fashion-mnist_train.csv")
+fmnist_test <- read_csv("fashion-mnist_test.csv")
+```
+
+The data frame `fmnist_train` contains 60,000 rows by 785 columns. Each row is an image, which has $28 \times 28 = 784$ pixels. The first column is the class label (response variable). The remaining 784 columns are the pixels (with the darkness of each pixel represented as a number between 0-255).
+
+```{r}
+dim(fmnist_train)
+table(fmnist_train$label)
+```
+
+The other data frame with the test set images, `fmnist_test`, has similar structure.
+
+```{r}
+dim(fmnist_test)
+table(fmnist_test$label)
+```
+
+# Plotting Images
+
+```{r}
+# vector with category names
+class_names <- c("T-shirt/top", "Trouser", "Pullover", "Dress", "Coat", "Sandal", "Shirt", "Sneaker", "Bag", "Ankle boot")
+```
+
+```{r}
+par(mfrow = c(4,4)) # make 4 by 4 grid
+par(mar = c(1, 1, 2, 1)) # adjust margins around image
+for(i in 1:16) {
+  img <- as.numeric(fmnist_train[i, -1]) 
+  image(matrix(img, 28, 28)[, 28:1], 
+    col = gray.colors(255, rev = TRUE), xaxt = "n", yaxt = "n", 
+    main = class_names[fmnist_train$label[i] + 1]) # add 1 since labels start at 0
+}
+```
+
+## Plot the first 16 images in the **test** set.
+
+```{r}
+par(mfrow = c(4,4)) # make 4 by 4 grid
+par(mar = c(1, 1, 2, 1)) # adjust margins around image
+for(i in 1:16) {
+  img <- as.numeric(fmnist_test[i, -1]) 
+  image(matrix(img, 28, 28)[, 28:1], 
+    col = gray.colors(255, rev = TRUE), xaxt = "n", yaxt = "n", 
+    main = class_names[fmnist_test$label[i] + 1]) # add 1 since labels start at 0
+}
+```
+
+# Decision Tree Model
+
+```{r}
+tree1 <- rpart(label ~ ., data = fmnist_train, method = "class")
+```
+
+Make predictions for the image labels on the **test set**, and compute the **confusion matrix**.
+
+```{r}
+pred_tree1 <- predict(tree1, newdata = fmnist_test, type = "class")
+# confusion matrix
+cm <- table(predicted = pred_tree1, actual = fmnist_test$label)
+addmargins(cm)
+```
+
+```{r}
+sum(diag(cm)) / 10000
+```
+
+-   The accuracy of the decision tree model on the test set is 68.94%.
+
+# Random Forest Model
+
+Fit a random forest model using the training set data. 
+
+- Set `classification = TRUE` so that the `ranger()` function fits classification trees; otherwise, regression trees would be built, since the response variable is coded using numeric values (0-9).
+
+```{r}
+set.seed(452) # for reproducibility
+rf1 <- ranger(label ~ ., data = fmnist_train, 
+              num.trees = 200, mtry = 28, 
+              classification = TRUE)
+```
+
+Make predictions for the image labels on the **test set**, and compute the **confusion matrix**.
+
+```{r}
+p1 <- predict(rf1, data = fmnist_test)
+pred_rf1 <- p1$predictions
+```
+
+```{r}
+# confusion matrix
+cm1 <- table(predicted = pred_rf1, actual = fmnist_test$label)
+addmargins(cm1)
+```
+
+
+```{r}
+sum(diag(cm1)) / 10000
+```
+
+-   The accuracy of the random forest model on the test set is 88.74%.
+
+-   The performance of random forest model is better than the single decision tree model because the accuracy of random forest model is 88.74% which is greater then the accuracy, 68.94%, of the single decision tree model.
+
+```{r}
+622 / 830
+```
+
+About 74.9% of the "Shirt" images are correctly classified by the random forest model.
+
+```{r}
+977 / 1022
+```
+
+About 95.6% of the "Bag" images are correctly classified by the random forest model.
+
+# Random Forest Model
+
+Fit another random forest model on the training set, but this time choose different values for `mtry` and `ntree`.
+
+-   Choose num.trees = 100; less ntree than the rf1.
+
+```{r}
+set.seed(452) 
+rf2 <- ranger(label ~ ., data = fmnist_train, 
+              num.trees = 100, mtry = 28, 
+              classification = TRUE)
+```
+
+```{r}
+p2 <- predict(rf2, data = fmnist_test)
+pred_rf2 <- p2$predictions
+```
+
+```{r}
+cm2 <- table(predicted = pred_rf2, actual = fmnist_test$label)
+addmargins(cm2)
+```
+
+```{r}
+sum(diag(cm2)) / 10000
+```
+
+-   The accuracy of the random forest model with less number of trees is 88.75% which is close to rf1.
+
+-   Choose num.trees = 300; more ntree than the rf1.
+
+```{r}
+set.seed(452) 
+rf3 <- ranger(label ~ ., data = fmnist_train, 
+              num.trees = 300, mtry = 28, 
+              classification = TRUE)
+```
+
+```{r}
+p3 <- predict(rf3, data = fmnist_test)
+pred_rf3 <- p3$predictions
+```
+
+```{r}
+cm3 <- table(predicted = pred_rf3, actual = fmnist_test$label)
+addmargins(cm3)
+```
+
+```{r}
+sum(diag(cm3)) / 10000
+```
+
+-   The accuracy of the random forest model with more number of trees is 88.64% which is approximately to 88.74% of rf1.
+
+**Increasing or decreasing number of trees are not affecting the performance of the random forest classifier on the test set too much.**
+
+-   choose mtry = 10; less mtry than rf1
+
+```{r}
+set.seed(452) 
+rf4 <- ranger(label ~ ., data = fmnist_train, 
+              num.trees = 200, mtry = 10, 
+              classification = TRUE)
+```
+
+```{r}
+p4 <- predict(rf4, data = fmnist_test)
+pred_rf4 <- p4$predictions
+```
+
+```{r}
+cm4 <- table(predicted = pred_rf4, actual = fmnist_test$label)
+addmargins(cm4)
+```
+
+```{r}
+sum(diag(cm4)) / 10000
+```
+
+The accuracy of model with less mtry is 88.05% which is close to rf1.
+
+-   choose mtry = 40; more mtry than rf1
+
+```{r}
+set.seed(452) 
+rf5 <- ranger(label ~ ., data = fmnist_train, 
+              num.trees = 200, mtry = 40, 
+              classification = TRUE)
+```
+
+```{r}
+p5 <- predict(rf5, data = fmnist_test)
+pred_rf5 <- p5$predictions
+```
+
+```{r}
+cm5 <- table(predicted = pred_rf5, actual = fmnist_test$label)
+addmargins(cm5)
+```
+
+```{r}
+sum(diag(cm5)) / 10000
+```
+
+The accuracy of model with more mtry is 88.86% which is close to rf1.
+
+**Increasing or decreasing mtry are not affecting the performance of the random forest classifier on the test set too much.**
